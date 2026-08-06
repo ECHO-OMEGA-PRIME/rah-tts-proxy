@@ -19,7 +19,10 @@ install -d -m 0755 "$RELEASE"
 git -C "$SOURCE_DIR" archive "$COMMIT" | tar -x -C "$RELEASE"
 printf '%s\n' "$COMMIT" >"$RELEASE/BUILD_SHA"
 "$ROOT/venv/bin/python" -m compileall -q "$RELEASE"
-"$ROOT/venv/bin/python" -m pytest -q "$RELEASE/tests"
+(
+  cd "$RELEASE"
+  "$ROOT/venv/bin/python" -m pytest -q tests
+)
 
 RAH_TTS_BUILD_SHA="$COMMIT" RAH_TTS_CALLBACK_BASE_URL=http://127.0.0.1:18472 RAH_TTS_STATE_DB="$ROOT/staging-state.db" "$ROOT/venv/bin/python" -m uvicorn app:app --app-dir "$RELEASE" --host 127.0.0.1 --port 18472 >"$ROOT/staging.log" 2>&1 &
 STAGE_PID=$!
