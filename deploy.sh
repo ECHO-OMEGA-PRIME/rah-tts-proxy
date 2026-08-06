@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-ROOT=/home/forge/rah-tts-proxy
+ROOT=/opt/rah-tts-proxy
 SOURCE_DIR=${SOURCE_DIR:-$(cd "$(dirname "$0")" && pwd)}
 COMMIT=${COMMIT:-$(git -C "$SOURCE_DIR" rev-parse HEAD)}
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 RELEASE="$ROOT/releases/${STAMP}-${COMMIT:0:12}"
-PREVIOUS=$(readlink -f "$ROOT/current" 2>/dev/null || true)
+PREVIOUS=""
+if [[ -L "$ROOT/current" ]]; then
+  PREVIOUS=$(readlink -f "$ROOT/current" 2>/dev/null || true)
+fi
 STAGE_PID=""
 
 cleanup() {

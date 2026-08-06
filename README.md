@@ -25,7 +25,7 @@ The smoke suite is intentionally no-spend: it exercises health, authentication n
 
 ## Deployment
 
-`deploy.sh` creates an immutable release, compiles and tests it, boots the exact release on staging port `18472`, runs the no-spend smoke, atomically promotes `current`, then smokes production port `8472`. Any failed post-promotion smoke restores the prior symlink and verifies rollback. Set `FORCE_POST_PROMOTE_FAILURE=1` once during commissioning to produce deterministic rollback evidence.
+`deploy.sh` creates an immutable release under `/opt/rah-tts-proxy`, compiles and tests it, boots the exact release on staging port `18472`, runs the no-spend smoke, atomically promotes `current`, then smokes production port `8472`. Any failed post-promotion smoke restores the prior symlink and verifies rollback. Set `FORCE_POST_PROMOTE_FAILURE=1` once during commissioning to produce deterministic rollback evidence.
 
 Credential files are provisioned outside Git under `/etc/echo/credentials/rah-tts-proxy/` and attached with `LoadCredential=`. Do not put credential values in environment files, shell history, deployment output, or reports.
 
