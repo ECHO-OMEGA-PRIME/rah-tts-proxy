@@ -17,6 +17,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+wait_http() {
+  local url=$1
+  for _ in $(seq 1 40); do
+    if curl -fsS "$url" >/dev/null 2>&1; then return 0; fi
+    sleep 0.25
+  done
+  return 1
+}
+
 install -d -m 0755 "$ROOT/releases"
 install -d -m 0755 "$RELEASE"
 git -C "$SOURCE_DIR" archive "$COMMIT" | tar -x -C "$RELEASE"
@@ -29,19 +38,23 @@ printf '%s\n' "$COMMIT" >"$RELEASE/BUILD_SHA"
 
 RAH_TTS_BUILD_SHA="$COMMIT" RAH_TTS_CALLBACK_BASE_URL=http://127.0.0.1:18472 RAH_TTS_STATE_DB="$ROOT/staging-state.db" "$ROOT/venv/bin/python" -m uvicorn app:app --app-dir "$RELEASE" --host 127.0.0.1 --port 18472 >"$ROOT/staging.log" 2>&1 &
 STAGE_PID=$!
-for _ in $(seq 1 40); do curl -fsS http://127.0.0.1:18472/health >/dev/null && break; sleep 0.25; done
+wait_http http://127.0.0.1:18472/health
 "$ROOT/venv/bin/python" "$RELEASE/smoke_live.py" --base http://127.0.0.1:18472 --expect-build "$COMMIT"
 kill "$STAGE_PID"; STAGE_PID=""
 
 ln -sfn "$RELEASE" "$ROOT/current.next"
 mv -Tf "$ROOT/current.next" "$ROOT/current"
+systemctl enable echo-rah-tts-proxy.service >/dev/null
 systemctl restart echo-rah-tts-proxy.service
-if [[ "${FORCE_POST_PROMOTE_FAILURE:-0}" == "1" ]] || ! "$ROOT/venv/bin/python" "$RELEASE/smoke_live.py" --base http://127.0.0.1:8472 --expect-build "$COMMIT"; then
+if [[ "${FORCE_POST_PROMOTE_FAILURE:-0}" == "1" ]] || ! wait_http http://127.0.0.1:8472/health || ! "$ROOT/venv/bin/python" "$RELEASE/smoke_live.py" --base http://127.0.0.1:8472 --expect-build "$COMMIT"; then
   if [[ -n "$PREVIOUS" && -d "$PREVIOUS" ]]; then
     ln -sfn "$PREVIOUS" "$ROOT/current.next"
     mv -Tf "$ROOT/current.next" "$ROOT/current"
     systemctl restart echo-rah-tts-proxy.service
+    wait_http http://127.0.0.1:8472/health
     "$ROOT/venv/bin/python" "$PREVIOUS/smoke_live.py" --base http://127.0.0.1:8472
+  else
+    systemctl stop echo-rah-tts-proxy.service
   fi
   echo "promotion rolled back" >&2
   exit 1
