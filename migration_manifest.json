@@ -1,0 +1,31 @@
+{
+  "worker": "rah-tts-proxy",
+  "migration_job": 27505,
+  "source_attestation": {
+    "inventory_rescue_sha256": "229a2c32248a7ff77b29978f8867bdca1187ec99febb3b0695f6208f9c37bca7",
+    "forge_normalized_bundle_sha256": "74358d64af67ee51f0ccf04895c6cb06d53ea0ce3eb0c15118c8bd0a3a73dedd",
+    "canonical_git_blob_sha256": "8cc78898e685191b5111b2a2bde2ba25008d1ec961cb19ca57cb600c72f490da",
+    "canonical_git_commit": "ff1fad7",
+    "equivalence_claimed": false,
+    "note": "Three distinct artifacts are pinned. Contract comparison, not byte equality, establishes route coverage."
+  },
+  "handlers": {"fetch": true, "scheduled": false},
+  "bindings": {
+    "ANALYTICS": {"source": "declared", "used": false, "target": "retired as a no-op"},
+    "secrets": {"target": "systemd credentials and voice gateway", "values_committed": false}
+  },
+  "routes": [
+    {"source": "GET /health", "target": "GET /health", "status": "covered"},
+    {"source": "GET /voices", "target": "GET /voices", "status": "covered_with_auth"},
+    {"source": "POST /tts", "target": "POST /tts", "status": "covered_with_auth_rate_bounds"},
+    {"source": "POST /clone", "target": "POST /clone", "status": "covered_with_admin_auth_consent_idempotency_bounds"}
+  ],
+  "route_coverage": 1.0,
+  "deliberate_deltas": [
+    "Wildcard CORS replaced by an exact allowlist.",
+    "Cost-bearing routes require authentication; clone also requires admin authorization, consent evidence, and idempotency.",
+    "GET routes reject other methods instead of accepting them accidentally.",
+    "Cloudflare fallback replaced by the private FORGE voice gateway and made explicit per request.",
+    "Provider and voice identifiers are not exposed in discovery responses or logs."
+  ]
+}

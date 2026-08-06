@@ -1,0 +1,42 @@
+[Unit]
+Description=RAH TTS Proxy
+After=network-online.target echo-voice-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rah-tts-proxy
+Group=rah-tts-proxy
+WorkingDirectory=/home/forge/rah-tts-proxy/current
+Environment=PYTHONUNBUFFERED=1
+Environment=RAH_TTS_GATEWAY_URL=http://127.0.0.1:8239
+Environment=RAH_TTS_CALLBACK_BASE_URL=http://127.0.0.1:8472
+Environment=RAH_TTS_STATE_DB=/var/lib/rah-tts-proxy/state.db
+LoadCredential=rah_tts_api_key:/etc/echo/credentials/rah-tts-proxy/api_key
+LoadCredential=rah_tts_clone_key:/etc/echo/credentials/rah-tts-proxy/clone_key
+LoadCredential=rah_tts_voice_map:/etc/echo/credentials/rah-tts-proxy/voice_map.json
+Environment=RAH_TTS_API_KEY_FILE=%d/rah_tts_api_key
+Environment=RAH_TTS_CLONE_KEY_FILE=%d/rah_tts_clone_key
+Environment=RAH_TTS_VOICE_MAP_FILE=%d/rah_tts_voice_map
+ExecStart=/home/forge/rah-tts-proxy/venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8472 --workers 2 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+StateDirectory=rah-tts-proxy
+StateDirectoryMode=0700
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

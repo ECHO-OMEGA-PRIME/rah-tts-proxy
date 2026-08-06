@@ -1,3 +1,8 @@
 node_modules/
 .wrangler/
 .dev.vars
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.db
+BUILD_SHA

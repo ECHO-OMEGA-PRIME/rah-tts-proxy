@@ -1,104 +1,36 @@
 # RAH TTS Proxy
 
-Cloudflare Worker that routes text-to-speech requests for the Right at Home BnB voice assistant. Primary provider is ElevenLabs (for Steven's cloned voice), with automatic fallback to Edge TTS via Echo Speak Cloud when ElevenLabs is unavailable.
+Private FORGE replacement for the retired Cloudflare Worker contract used by the Right at Home BnB voice assistant. It preserves `/health`, `/voices`, `/tts`, and `/clone` while delegating synthesis and cloning to the canonical Echo Voice Gateway on loopback.
 
-## Features
+## Security contract
 
-- **ElevenLabs TTS** -- Generate speech using ElevenLabs API with support for cloned voices (must use `eleven_multilingual_v2` model)
-- **Edge TTS Fallback** -- Automatic fallback to Edge TTS (en-US-GuyNeural) via `echo-speak-cloud` Worker when ElevenLabs fails or is unconfigured
-- **Multiple Voices** -- 4 pre-configured voices: Steven (cloned owner voice), Echo Prime, Bree, and Belle
-- **Voice Cloning** -- Clone new voices by uploading base64-encoded audio samples to ElevenLabs Instant Voice Cloning API
-- **Voice Settings** -- Configurable stability, similarity boost, and style parameters per request
-- **Audio Validation** -- Rejects suspiciously small audio responses (<100 bytes) and falls back automatically
-- **Structured JSON Logging** -- All operations logged with timestamps and context
+- `/health` is public and metadata-only.
+- `/voices` and `/tts` require `Authorization: Bearer <service token>`.
+- `/clone` also requires `X-Clone-Authorization`, `X-Consent-Ref`, and `Idempotency-Key`.
+- Browser access is restricted to configured RAH origins. All responses include no-store and security headers.
+- Text, audio, provider identifiers, credentials, and upstream response bodies are never logged.
+- TTS concurrency is four; clone concurrency is one; payloads, provider responses, and rates are bounded.
+- Provider credentials stay in the Voice Gateway. This adapter receives only inbound tokens and an alias-to-voice map through systemd credentials.
 
-## API Endpoints
+## Run and verify
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check (Steven voice status, ElevenLabs config) |
-| `GET` | `/voices` | List available voices with availability status |
-| `POST` | `/tts` | Generate speech from text |
-| `POST` | `/clone` | Clone a new voice from audio samples |
-
-### POST `/tts` Request Body
-
-```json
-{
-  "text": "Welcome to Right at Home BnB!",
-  "voice": "steven",
-  "stability": 0.5,
-  "similarity_boost": 0.75,
-  "style": 0.0
-}
+```bash
+python -m pip install -r requirements.txt
+pytest -q
+uvicorn app:app --host 127.0.0.1 --port 8472
+python smoke_live.py --base http://127.0.0.1:8472 --expect-build development
 ```
 
-Returns `audio/mpeg` binary response with headers `X-Voice` and `X-Provider`.
-
-### POST `/clone` Request Body
-
-```json
-{
-  "name": "Steven's Voice",
-  "description": "Right at Home BnB owner voice clone",
-  "files": [
-    {
-      "data": "<base64-encoded-audio>",
-      "name": "sample1.mp3",
-      "type": "audio/mpeg"
-    }
-  ]
-}
-```
-
-Returns the new `voice_id` and instructions for setting it as a Worker secret.
-
-## Configuration
-
-### Environment Variables (`wrangler.toml`)
-
-```toml
-[vars]
-DEFAULT_VOICE = "steven"
-PROPERTY_NAME = "Right at Home BnB"
-```
-
-### Secrets (set via `wrangler secret put`)
-
-| Secret | Description |
-|--------|-------------|
-| `ELEVENLABS_API_KEY` | ElevenLabs API key |
-| `STEVEN_VOICE_ID` | Cloned voice ID for Steven (from `/clone` response) |
-| `ECHO_API_KEY` | Echo API key for Edge TTS fallback |
-
-### Voice Configuration
-
-| Voice | ID | Model | Description |
-|-------|----|-------|-------------|
-| `steven` | Set via secret | `eleven_multilingual_v2` | Property owner's cloned voice |
-| `echo` | `keDMh3sQlEXKM4EQxvvi` | `eleven_multilingual_v2` | Echo Prime AI voice |
-| `bree` | `pzKXffibtCDxnrVO8d1U` | `eleven_multilingual_v2` | Bree personality voice |
-| `belle` | `pzKXffibtCDxnrVO8d1U` | `eleven_multilingual_v2` | Belle (uses Bree voice) |
+The smoke suite is intentionally no-spend: it exercises health, authentication negatives, exact CORS, security headers, 404/405 behavior, and deployed-build identity without synthesizing or cloning audio.
 
 ## Deployment
 
-```bash
-cd O:\ECHO_OMEGA_PRIME\WORKERS\rah-tts-proxy
-npx wrangler deploy
+`deploy.sh` creates an immutable release, compiles and tests it, boots the exact release on staging port `18472`, runs the no-spend smoke, atomically promotes `current`, then smokes production port `8472`. Any failed post-promotion smoke restores the prior symlink and verifies rollback. Set `FORCE_POST_PROMOTE_FAILURE=1` once during commissioning to produce deterministic rollback evidence.
 
-# Set secrets
-echo "API_KEY" | npx wrangler secret put ELEVENLABS_API_KEY
-echo "VOICE_ID" | npx wrangler secret put STEVEN_VOICE_ID
-echo "ECHO_KEY" | npx wrangler secret put ECHO_API_KEY
+Credential files are provisioned outside Git under `/etc/echo/credentials/rah-tts-proxy/` and attached with `LoadCredential=`. Do not put credential values in environment files, shell history, deployment output, or reports.
 
-# Verify
-curl -s https://rah-tts-proxy.bmcii1976.workers.dev/health
-```
+## Migration evidence
 
-## Tech Stack
+[`migration_manifest.json`](migration_manifest.json) pins the inventory rescue hash, the recovered FORGE bundle hash, and the canonical Git source hash independently; it does not falsely claim those artifacts are byte-equivalent. It records 4/4 route coverage, the unused Analytics binding retirement, absence of scheduled handlers, and every deliberate security delta.
 
-- **Runtime**: Cloudflare Workers
-- **Language**: JavaScript (vanilla)
-- **TTS Primary**: ElevenLabs API v1 (text-to-speech, voice cloning)
-- **TTS Fallback**: Echo Speak Cloud Worker (Edge TTS, en-US-GuyNeural)
-- **Audio Format**: MP3 (audio/mpeg)
+The legacy Worker files remain in `src/index.js` and `wrangler.toml` as immutable provenance. They are not deployed.
